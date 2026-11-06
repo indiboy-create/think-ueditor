@@ -1,0 +1,86 @@
+name: Sync UEditor Plus
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-ueditor-plus
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      VARIANT: dist-min
+      ASSET_DIR: resources/assets/ueditor
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 获取上游最新正式版
+        id: up
+        run: |
+          TAG=$(curl -fsSL "https://api.github.com/repos/modstart-lib/ueditor-plus/releases?per_page=30" \
+            | jq -r '[.[] | select(.draft==false and .prerelease==false) | .tag_name
+                     | select(test("^v?[0-9]+\\.[0-9]+\\.[0-9]+$"))][0]')
+          [ -n "$TAG" ] && [ "$TAG" != "null" ] || { echo "未找到正式版"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: 比较当前版本
+        id: cur
+        run: |
+          CUR=$(jq -r '.extra["ueditor-plus"].version // ""' composer.json)
+          if [ "$CUR" = "${{ steps.up.outputs.version }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 下载并铺平产物
+        if: steps.cur.outputs.skip == 'false'
+        env:
+          V: ${{ steps.up.outputs.version }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/ueditor.zip \
+            "https://github.com/modstart-lib/ueditor-plus/releases/download/${{ steps.up.outputs.tag }}/${VARIANT}.zip"
+          rm -rf "$ASSET_DIR" && mkdir -p "$ASSET_DIR"
+          unzip -q /tmp/ueditor.zip -d /tmp/ueditor
+          cp -R "/tmp/ueditor/${VARIANT}/." "$ASSET_DIR/"
+          for f in ueditor.config.js ueditor.all.js themes lang dialogs; do
+            [ -e "$ASSET_DIR/$f" ] || { echo "缺少 $f，上游结构可能变更"; exit 1; }
+          done
+          curl -fsSL -o "$ASSET_DIR/LICENSE" \
+            "https://raw.githubusercontent.com/modstart-lib/ueditor-plus/${{ steps.up.outputs.tag }}/LICENSE"
+          echo "$V" > "$ASSET_DIR/version.txt"
+          python3 - <<'PY'
+          import json, os
+          path = 'composer.json'
+          with open(path, encoding='utf-8') as f:
+              data = json.load(f)
+          data['extra']['ueditor-plus']['version'] = os.environ['V']
+          with open(path, 'w', encoding='utf-8') as f:
+              f.write(json.dumps(data, indent=4, ensure_ascii=False) + '\n')
+          PY
+
+      - name: 提交并打 tag
+        if: steps.cur.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "无变更"
+            exit 0
+          fi
+          V="${{ steps.up.outputs.version }}"
+          git commit -m "chore: sync UEditor Plus v${V}"
+          git tag -a "v${V}" -m "UEditor Plus v${V}"
+          git push origin "HEAD:${{ github.event.repository.default_branch }}"
+          git push origin "v${V}"

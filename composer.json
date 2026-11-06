@@ -1,0 +1,39 @@
+{
+    "name": "youvision/think-ueditor",
+    "description": "UEditor Plus 的 ThinkPHP 8 集成包，内置前端静态资源与后端上传接口",
+    "type": "library",
+    "license": "Apache-2.0",
+    "keywords": [
+        "thinkphp",
+        "ueditor",
+        "ueditor-plus",
+        "editor",
+        "upload"
+    ],
+    "require": {
+        "php": ">=8.0",
+        "topthink/framework": "^8.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Youvision\\ThinkUeditor\\": "src/"
+        }
+    },
+    "extra": {
+        "ueditor-plus": {
+            "version": "4.5.0",
+            "variant": "dist-min"
+        },
+        "think": {
+            "services": [
+                "Youvision\\ThinkUeditor\\Service"
+            ],
+            "config": {
+                "ueditor": "config/ueditor.php"
+            }
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
