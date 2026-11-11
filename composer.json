@@ -1,5 +1,15 @@
 {
     "name": "youvision/think-ueditor",
+    "authors": [
+        {
+            "name": "indiboy-create",
+            "homepage": "https://github.com/indiboy-create"
+        },
+        {
+            "name": "AI",
+            "role": "Developer"
+        }
+    ],
     "description": "UEditor Plus 的 ThinkPHP 8 集成包，内置前端静态资源与后端上传接口",
     "type": "library",
     "license": "Apache-2.0",
